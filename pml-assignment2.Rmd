@@ -1,0 +1,89 @@
+<link href="http://kevinburke.bitbucket.org/markdowncss/markdown.css" rel="stylesheet"></link>
+<link href="http://kbroman.org/qtlcharts/assets/vignettes/markdown_modified.css" rel="stylesheet"></link>
+
+## Practical Machine Learning Assignment - James Allsopp
+
+
+I began by downloading the data and then inspecting it using the summary command. I determined that some of the variables were either;
+- Housekeeping - X variable, user_name, timestamp
+- Statistics - e.g skew and kurtosis variables
+
+In addition to this, all columns containing significant NA or #DIV/0! errors were removed. The script for this is;
+```{r load and clean data}
+library(caret)
+analyseData= function(datafile)
+{
+  data<-read.csv(datafile)
+  datalesscols = data[,colSums(is.na(data)) < 1800]
+  d1<-datalesscols[,grep("^(skewness)",names(datalesscols), value=TRUE, invert=TRUE)]
+  d1<-d1[,grep("^(kurtosis)",names(d1), value=TRUE, invert=TRUE)]
+  d1<-d1[,grep("^(max)",names(d1), value=TRUE, invert=TRUE)]
+  d1<-d1[,grep("^(min)",names(d1), value=TRUE, invert=TRUE)]
+  d1<-d1[,grep("^(amplitude)",names(d1), value=TRUE, invert=TRUE)]
+  d1<-d1[,grep("X",names(d1), value=TRUE, invert=TRUE)]
+  d1<-d1[,grep("(timestamp)",names(d1), value=TRUE, invert=TRUE)]
+  d1<-d1[,grep("(window)",names(d1), value=TRUE, invert=TRUE)]
+  d1<-d1[,grep("(user_name)",names(d1), value=TRUE, invert=TRUE)]
+
+  return (d1)
+}
+d<-read.csv("pml-training.csv")
+datatrain<-analyseData("pml-training.csv")
+datatest<-analyseData("pml-testing.csv")
+
+```
+
+
+This reduces the number of columns from `r ncol(d)-1`  to `r ncol(datatrain)-1` making the data set simpler to deal with and more focused. The full training dataset of `r nrow(datatrain)` rows was used. The test set comprised of `r nrow(datatest)` rows.
+
+The data was then ran through a random forest model with the default settings using the command,
+
+```{r train}
+modFit<-train(classe~.,data=datatrain,method="rf")
+```
+
+which resulted in an accuracy of 99.31% taken from the table below;
+```{r training results}
+modFit
+```
+
+This was then tested on the test set, using the commands;
+```{r prediction}
+pred<-predict(modFit,datatest)
+```
+
+which produced the prediction list;
+```{r displayprediction}
+pred
+```
+
+Files were produced for upload resulting in a 100% prediction success rate, consistent with the 99.31% on the training set. A much larger testing set (~1000 would cause an expected seven misclassifications) would be required to determine by how much the accuracy drops from training to test set.
+
+From [this website](http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr) it is claimed that for Random Forests there is no need for cross-validation as bootstrapping occurs internally during the run and this process is unbiased. I think for the default options 25 trees are created.
+
+This was then repeated using the boosting methods, but this crashed my computer.
+The command used was
+` modFitBoost<-train(classe ~., method="gbm",data=d,verbose=FALSE)`
+
+`Identifying the important variables using PCA`
+
+We ran a PCA analysis to test how many principle components were needed for the project to see if the data set could be compressed at all.
+
+```{r pca}
+dsub<-subset(datatrain,select = -classe)
+```
+
+As there are `r ncol(dsub)` remaining variables, after we have to scaled the variables, the sum of the variances should add up to `r ncol(dsub)`. So to account for 80% of the variance (41.6=0.8*`r ncol(dsub)`) we require only the first twelve principle components. This will significantly reduce the processing time for future analysis.
+
+```{r pcascreeplot}
+
+pca <- prcomp(scale(dsub))
+
+screeplot(pca,type="lines")
+```
+
+The variance accounted for from the first twelve components is `r sum((pca$sdev[1:12])^2)`. There isn't really a shoulder that accounts for a significant amount of the variance to use.
+
+
+
+
